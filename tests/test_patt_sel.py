@@ -16,14 +16,14 @@ class TestPattSel(unittest.TestCase):
 
         return super().setUpClass()
 
-    def test_get_pattern_row(self):
+    def test_get_pattern_row_num(self):
         # TODO: add better tests for the cases of existing patterns
         self.assertNotEqual(
-            self.patt_sel.get_pattern_row("SC_SXR_STD_FR_1_Hz_off_7"), -1
+            self.patt_sel.get_pattern_row_num("SC_SXR_STD_FR_1_Hz_off_7"), -1
         )
 
         self.assertEqual(
-            self.patt_sel.get_pattern_row("name_that_will_never_exist"), -1
+            self.patt_sel.get_pattern_row_num("name_that_will_never_exist"), -1
         )
 
     def test_pattern_exists(self):
@@ -58,10 +58,10 @@ class TestPattSel(unittest.TestCase):
         and apply functions
         """
         # test loading non-existant pattern
-        self.assertIsNone(self.patt_sel.load_pattern("name_that_will_never_exist"), 1)
+        self.assertFalse(self.patt_sel.load_pattern("name_that_will_never_exist"))
 
         # test loading of pattern correctly, independent of pattern programmer
-        self.assertEqual(self.patt_sel.load_pattern("SC_SXR_STD_FR_1_Hz_off_7"), 1)
+        self.assertTrue(self.patt_sel.load_pattern("SC_SXR_STD_FR_1_Hz_off_7"))
         self.assertEqual(
             caput(
                 self.patt_sel.globals.get_pattern_loaded_pv(),
@@ -72,12 +72,12 @@ class TestPattSel(unittest.TestCase):
         self.assertEqual(self.patt_sel.get_pattern_loaded(), "SC_SXR_STD_FR_1_Hz_off_7")
 
         # test applying pattern that is not loaded
-        self.assertIsNone(self.patt_sel.apply_pattern("SC_BSYD_EXP_AC_B_110_Hz"))
+        self.assertFalse(self.patt_sel.apply_pattern("SC_BSYD_EXP_AC_B_110_Hz"))
         # test applying non-existant pattern
-        self.assertIsNone(self.patt_sel.apply_pattern("name_that_will_never_exist"))
+        self.assertFalse(self.patt_sel.apply_pattern("name_that_will_never_exist"))
 
         # test applying pattern correctly, independent of pattern programmer
-        self.assertEqual(self.patt_sel.apply_pattern("SC_SXR_STD_FR_1_Hz_off_7"), 1)
+        self.assertTrue(self.patt_sel.apply_pattern("SC_SXR_STD_FR_1_Hz_off_7"))
         self.assertEqual(
             caput(
                 self.patt_sel.globals.get_pattern_running_pv(),
@@ -110,10 +110,7 @@ class TestPattSel(unittest.TestCase):
             1,
         )
 
-        self.assertEqual(
-            self.patt_sel.run_pattern("SC_SXR_STD_FR_10_Hz_off_7"),
-            1,
-        )
+        self.assertTrue(self.patt_sel.run_pattern("SC_SXR_STD_FR_10_Hz_off_7"))
 
         self.assertEqual(
             self.patt_sel.get_pattern_loaded(), "SC_SXR_STD_FR_10_Hz_off_7"
@@ -259,6 +256,12 @@ class TestPattSel(unittest.TestCase):
                 5: [0, "FR"],
             },
         )
+
+    def test_pattern_data(self):
+
+        # print(self.patt_sel.pattern_exists("SC_SXR_EXP_FR_1.3_kHz_off_7"))
+        # print(self.patt_sel.get_pattern_data("SC_SXR_EXP_FR_1.3_kHz_off_7"))
+        patt_dict = self.patt_sel.pattern_exists("SC_SXR_EXP_FR_1.3_kHz_off_7")
 
 
 if __name__ == "__main__":

@@ -125,6 +125,13 @@ class globals:
         """
         return f"{self.get_tpg_base_pv()}:PATTERNS"
 
+    def get_patt_table_heartbeat_pv(self):
+        """
+        returns the pattern table name with system and unit generalized
+        TPG:{system}:{unit}:HEARTBEAT
+        """
+        return f"{self.get_tpg_base_pv()}:PATTERNS_HEARTBEAT"
+
     def get_mode_table_name(self):
         """
         returns the pattern table name with system and unit generalized
@@ -138,6 +145,35 @@ class globals:
         TPG:{system}:{unit}:MODE_FREQ_MAX
         """
         return f"{self.get_tpg_base_pv()}:TAGS"
+
+    # TODO: move assert dest into here so it can be used :)
+    def get_timeing_source_pv(self, dest):
+        """"""
+        if type(dest) is str:
+            dest = self.DEST_NAMES.index(dest)
+        pv = f"TPG:{self.system}:{self.unit}:DST0{dest}:TIME_SRC"
+        return pv
+
+    def get_offset_pv(self, dest):
+        """"""
+        if type(dest) is str:
+            dest = self.DEST_NAMES.index(dest)
+        pv = f"TPG:{self.system}:{self.unit}:DST0{dest}:OFFSET_RBV"
+        return pv
+
+    def get_dest_timeslot_pv(self, dest):
+        """"""
+        if type(dest) is str:
+            dest = self.DEST_NAMES.index(dest)
+        pv = f"TPG:{self.system}:{self.unit}:DST0{dest}:TS"
+        return pv
+
+    def get_dest_timeslot_mask_pv(self, dest):
+        """"""
+        if type(dest) is str:
+            dest = self.DEST_NAMES.index(dest)
+        pv = f"TPG:{self.system}:{self.unit}:DST0{dest}:TSMASK"
+        return pv
 
     def get_timing_sources(self, contains_any_timing_source=False):
         """
@@ -182,12 +218,14 @@ class globals:
     def get_pattern_loaded_pv(self):
         """
         returns the pv with the pattern loaded to the TPG
+        Only Read from this PV
         """
         return f"{self.get_tpg_base_pv()}:PATT_PATH_LOADED"
 
     def get_pattern_running_pv(self):
         """
         returns the pv with the readback of the running pattern relitive path
+        Only Read from this PV
         """
         return f"{self.get_tpg_base_pv()}:PATT_PATH_APPLIED"
 

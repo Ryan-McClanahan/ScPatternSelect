@@ -6,15 +6,46 @@ from p4p.client.thread import Context
 
 
 class ScPatternSelect:
-    def __init__(self, system: str, unit: str, ioc: str):
+    def __init__(self, system: str, unit: str, ioc: str, timeout: float = 0.5):
         """"""
+        # TODO: make connecting to the nttabe safer
         self.system = system
         self.unit = unit
         self.ioc = ioc
+        self.timeout = timeout
         self.globals = globals(self.system, self.unit, self.ioc)
-        pva = Context("pva", nt=False)
-        self.patt_table = pva.get(self.globals.get_patt_table_name())
+        self.pva = Context("pva", nt=False)
+        self.patt_table_sub = self.pva.monitor(
+            self.globals.get_patt_table_name(), self.patt_table_callback
+        )
+        self.get_pattern_table()
         self.init_err_mesages()
+
+    # what should the behavior be when unable to connect to the nttable?
+    # Wait until connected?
+    # Once it does the initial get everything is fine
+    def patt_table_callback(self, *args, **kwargs):
+        """temp callback"""
+        self.get_pattern_table()
+
+    def get_pattern_table(self):
+        self.is_patt_table_available = False
+        try:
+            self.patt_table = self.pva.get(
+                self.globals.get_patt_table_name(), timeout=self.timeout
+            )
+        except TimeoutError as err:
+            print(str(err))
+            print(
+                "The pattern NTTable is not available right not.  Will connect when it is available"
+            )
+        else:
+            print("Pattern Connected")
+            self.is_patt_table_available = True
+
+    def get_is_patt_table_available(self):
+        """ """
+        return self.is_patt_table_available
 
     def load_pattern(self, pattern_name: str):
         """
@@ -37,7 +68,7 @@ class ScPatternSelect:
         """
         # check if pattern exists
         if not self.pattern_exists(pattern_name):
-            return None
+            return False
 
         rel_patt_path = self.get_relative_pattern_path(pattern_name)
 
@@ -47,9 +78,9 @@ class ScPatternSelect:
         load_caput = caput(self.globals.get_load_pv(), 1)
 
         if path_caput == load_caput == 1:
-            return 1
+            return True
         else:
-            return None
+            return False
 
     def apply_pattern(self, pattern_name: str):
         """
@@ -73,15 +104,19 @@ class ScPatternSelect:
 
         # check if pattern exists
         if not self.pattern_exists(pattern_name):
-            return None
+            return False
 
         # return if loaded pattern is not expected
         if pattern_name != self.get_pattern_loaded():
-            return None
+            return False
 
         # trigger apply process
         # TODO: tripple check the runing pv to see the pattern running?
-        return caput(self.globals.get_apply_pv(), 1)
+        caput_val = caput(self.globals.get_apply_pv(), 1)
+        if caput_val is None:
+            return False
+
+        return True
 
     def run_pattern(self, pattern_name):
         """
@@ -103,13 +138,13 @@ class ScPatternSelect:
 
         # load pattern, if load unsuccessfull return None
         if self.load_pattern(pattern_name) == None:
-            return None
+            return False
 
         # apply pattern, if apply unsuccessfull return None
         if self.apply_pattern(pattern_name) == None:
-            return None
+            return False
 
-        return 1
+        return True
 
     def pattern_exists(self, pattern_name: str):
         """
@@ -125,12 +160,12 @@ class ScPatternSelect:
         Flase
             pattern does not exist
         """
-        if self.get_pattern_row(pattern_name) > 0:
+        if self.get_pattern_row_num(pattern_name) > 0:
             return True
 
         return False
 
-    def get_pattern_row(self, pattern_name: str):
+    def get_pattern_row_num(self, pattern_name: str):
         """
         returns the row the pattern is in in the NTTable
         input
@@ -144,8 +179,11 @@ class ScPatternSelect:
             pattern exists and is in the row number
 
         -1:
-            pattern does not exist
+            pattern does not exist or pattern NTTable is down
         """
+        if not self.is_patt_table_available:
+            return -1
+
         for row_num, name in enumerate(self.patt_table["value"]["PATTERN_NAME"]):
             if name == pattern_name:
                 return row_num
@@ -165,10 +203,10 @@ class ScPatternSelect:
         True
             pattern is verified
         Flase
-            pattern is not verified or does not exist
+            pattern is not verified, does not exist, or NTTable is down
         """
 
-        row_num = self.get_pattern_row(pattern_name)
+        row_num = self.get_pattern_row_num(pattern_name)
 
         if row_num == -1:
             return False
@@ -213,7 +251,12 @@ class ScPatternSelect:
         rate_list
             list of possible rates to the given destination
             with the given time_source and verification status
+        None
+            Connection to the NTTable has not been established
         """
+        if not self.is_patt_table_available:
+            return None
+
         self.assert_dest(dest)
         self.assert_time_source(time_source_req)
 
@@ -354,7 +397,12 @@ class ScPatternSelect:
             returns the pattern name if it exists
         None:
             returns None if the patter does not exist
+            or connection to the NTTable is down
         """
+        if not self.is_patt_table_available:
+            return None
+
+        # TODO: make a nice error for when a rate=0 and ts!=FR
         if dest_data is None:
             dest_data = {}
             dest_data[1] = [diag0_rate, diag0_time_src]
@@ -453,10 +501,36 @@ class ScPatternSelect:
         else:
             return os.path.join("test", pattern_name)
 
-    def get_pattern_data():
-        """"""
+    def get_pattern_data(self, pattern_name):
+        """
+        Takes the given pattern name and returns a dictionary of it's information
+        Mainly used for 'actual to search' button
+        """
+        if not self.is_patt_table_available:
+            return None
 
-    def get_pattern_running_data():
+        pattern_data = {}
+
+        if pattern_name.__contains__("/"):
+            pattern_name = os.path.split(pattern_name)
+            pattern_name = pattern_name[-1]
+
+        pattern_row = self.get_pattern_row_num(pattern_name)
+
+        if pattern_row < 0:
+            return None
+
+        for key in self.patt_table["value"]:
+            pattern_data[key] = self.patt_table["value"][key][pattern_row]
+
+        return pattern_data
+
+    def get_pattern_running_data(self):
+        """"""
+        running_pattern = self.get_pattern_running()
+        return self.get_pattern_data(running_pattern)
+
+    def get_pattern_rates():
         """"""
 
     def get_pattern_running(self):
@@ -476,9 +550,6 @@ class ScPatternSelect:
         pattern_name = os.path.split(patt_path)
         return pattern_name[-1]
 
-    def get_pattern_rates():
-        """"""
-
     def stop_beam(self):
         """
         stops the beam using tpg beam classes
@@ -494,7 +565,7 @@ class ScPatternSelect:
 
     def tpg_beam_class_reset(self):
         """
-        attempts to recover the tpg beam classes
+        attempts to recover the tpg beam classes (opposite of stop_beam)
 
         Add option to add callback once beam is recovered?
         output
